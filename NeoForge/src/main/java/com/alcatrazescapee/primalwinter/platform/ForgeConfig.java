@@ -19,6 +19,7 @@ public class ForgeConfig extends Config
     public final ModConfigSpec client;
 
     private final ModConfigSpec.ConfigValue<List<? extends String>> winterDimensions;
+    private final ModConfigSpec.ConfigValue<List<? extends String>> excludedBiomeNamespaces;
 
     private final ModConfigSpec.ConfigValue<String> fogColorDayValue;
     private final ModConfigSpec.ConfigValue<String> fogColorNightValue;
@@ -66,6 +67,22 @@ public class ForgeConfig extends Config
                 () -> Level.OVERWORLD.location().toString(),
                 o -> o instanceof String s && ResourceLocation.tryParse(s) != null);
 
+        excludedBiomeNamespaces = common
+            .comment(
+                "",
+                " A list of mod namespaces whose biomes should NOT be winterized.",
+                " Even if a mod's biomes appear as possible biomes inside a winter dimension's biome source,",
+                " any biome whose namespace matches an entry here will be excluded from winter modifications.",
+                " Example: [\"ad_astra\", \"byg\"] would prevent Ad Astra and BYG biomes from being winterized.",
+                " The 'minecraft' namespace cannot be excluded (it is always included)."
+            )
+            .translation(key("excludedBiomeNamespaces"))
+            .defineListAllowEmpty(
+                "excludedBiomeNamespaces",
+                () -> List.of(),
+                () -> "ad_astra",
+                o -> o instanceof String s && !s.isBlank());
+
         // Client
         fogDensity = client
             .comment("", " How dense the fog effect during a snowstorm is.")
@@ -98,13 +115,11 @@ public class ForgeConfig extends Config
         this.common = common.build();
         this.client = client.build();
     }
-
     public void updateCaches()
     {
         fogColorDayCache = extractColor(fogColorDayValue);
         fogColorNightCache = extractColor(fogColorNightValue);
     }
-
     @Override
     protected Collection<ResourceKey<Level>> winterDimensions()
     {
@@ -115,18 +130,23 @@ public class ForgeConfig extends Config
             .map(e -> ResourceKey.create(Registries.DIMENSION, e))
             .toList();
     }
-
+    @Override
+    protected List<String> excludedBiomeNamespaces()
+    {
+        return excludedBiomeNamespaces.get()
+            .stream()
+            .map(Object::toString)
+            .toList();
+    }
     @Override
     protected void syncTo(ServerPlayer player, ConfigPacket packet)
     {
         PacketDistributor.sendToPlayer(player, packet);
     }
-
     private String key(String path)
     {
         return PrimalWinter.MOD_ID + ".config." + path;
     }
-
     private boolean isColor(Object o)
     {
         if (!(o instanceof String s)) return false;
@@ -134,7 +154,6 @@ public class ForgeConfig extends Config
         catch (NumberFormatException e) { return false; }
         return true;
     }
-
     private int extractColor(ModConfigSpec.ConfigValue<String> value)
     {
         try { return Integer.parseInt(value.get()); }
